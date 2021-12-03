@@ -535,13 +535,31 @@ class FileChecker:
     def run_checks(self) -> Tuple[str, Results, Dict[str, int]]:
         """Run checks against the file."""
         assert self.processor is not None
+
+        syntax_error_reported = False
         try:
             self.run_ast_checks()
+        except (SyntaxError, tokenize.TokenError) as e:
+            row, column = self._extract_syntax_information(e)
+            self.report(
+                "E902" if isinstance(e, tokenize.TokenError) else "E999",
+                row,
+                column,
+                f"{type(e).__name__}: {e.args[0]}",
+            )
+            syntax_error_reported = True
+
+        try:
             self.process_tokens()
         except (SyntaxError, tokenize.TokenError) as e:
-            code = "E902" if isinstance(e, tokenize.TokenError) else "E999"
-            row, column = self._extract_syntax_information(e)
-            self.report(code, row, column, f"{type(e).__name__}: {e.args[0]}")
+            if not syntax_error_reported:
+                row, column = self._extract_syntax_information(e)
+                self.report(
+                    "E902" if isinstance(e, tokenize.TokenError) else "E999",
+                    row,
+                    column,
+                    f"{type(e).__name__}: {e.args[0]}",
+                )
             return self.filename, self.results, self.statistics
 
         logical_lines = self.processor.statistics["logical lines"]
